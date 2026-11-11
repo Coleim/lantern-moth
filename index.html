@@ -24,6 +24,9 @@ button{font:700 18px Karla,sans-serif;color:var(--ink);background:var(--amber);b
 button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 #pz,#dr{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;background:#05060fcc;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:5}
 #pz.show,#dr.show{display:flex}
+#gb{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 18px);width:min(420px,80vw);text-align:center;font-size:14px;pointer-events:none}
+#gb div{height:9px;background:#ffffff1c;border-radius:5px;margin-top:6px;overflow:hidden}
+#gb i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ff4f8b,#ffd98a);transition:width .2s}
 .col{display:flex;flex-direction:column;gap:12px;min-width:220px}
 .ghost{background:transparent;color:var(--amber);border:2px solid var(--amber);box-shadow:none}
 .cards{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;max-width:760px}
@@ -35,9 +38,10 @@ button:focus-visible{outline:3px solid #fff;outline-offset:3px}
 <body>
 <canvas id="c"></canvas>
 <div id="hud"><div>Glow<b id="sc">0</b><small id="ul" style="display:block;margin-top:6px;opacity:.6;max-width:220px"></small></div><div class="r">Streak<b id="cb">x1</b><div id="pulse"><i></i></div><small style="display:block;margin-top:6px;opacity:.55">Esc to pause</small></div></div>
+<div id="gb"><span id="gt"></span><div><i></i></div></div>
 <div id="dr"></div>
 <div id="pz"><h1>Paused</h1><p>The meadow holds its breath.</p><div class="col"><button id="rs">Continue</button><button id="rt" class="ghost">Retry</button><button id="qt" class="ghost">Quit to title</button></div></div>
-<div id="ov"><h1 id="ttl">Lantern Moth</h1><p id="msg">You’re the last light in the dark. Steer with your mouse or finger and drink pollen to keep your glow alive. Shadows hate light: linger near one and it fades. Click, tap or press space to burst. Your moth fires darts upward on its own. Every 24 seconds you pick an upgrade, and every third wave an invader fleet marches down.</p><button id="go">Take flight</button></div>
+<div id="ov"><h1 id="ttl">Lantern Moth</h1><p id="msg">You’re the last light in the dark. Steer with your mouse or finger and drink pollen to keep your glow alive. Shadows hate light: linger near one and it fades. Click, tap or press space to burst. Drink pollen and burn shadows to fill the gift bar at the bottom, then pick an upgrade.</p><button id="go">Take flight</button></div>
 <script>
 (()=>{
 const c=document.getElementById('c'),x=c.getContext('2d');
@@ -51,7 +55,7 @@ let m,tg,R,MAXR=280,score,combo,pollen,shades,parts,rings,cd,sp,spP,over=0;
 const specks=Array.from({length:140},()=>({x:Math.random(),y:Math.random(),r:rnd(.6,2.2),a:rnd(.2,.7)}));
 let ac;
 function beep(f,d=.12,v=.05,ty='sine'){try{if(!ac)ac=new (window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();o.type=ty;o.frequency.value=f;g.gain.setValueAtTime(v,ac.currentTime);g.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+d);o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d)}catch(e){}}
-function reset(){MAXR=280;up={};windUsed=0;fleet=[];darts=[];bolts=[];wave=1;nd=24;fireT=0;ft=0;banner={t:0,s:''};$('ul').textContent='Wave 1';m={x:W/2,y:H/2,a:0};tg={x:W/2,y:H/2};R=MAXR*.8;score=0;combo=0;pollen=[];shades=[];parts=[];rings=[];cd=0;sp=1;spP=0;t=0;shake=0}
+function reset(){MAXR=280;up={};windUsed=0;wave=1;prog=0;need=35;banner={t:0,s:''};$('ul').textContent='Wave 1';barUp();m={x:W/2,y:H/2,a:0};tg={x:W/2,y:H/2};R=MAXR*.8;score=0;combo=0;pollen=[];shades=[];parts=[];rings=[];cd=0;sp=1;spP=0;t=0;shake=0}
 function burst(px,py,n,col,sp2=120){for(let i=0;i<n;i++){const a=Math.random()*6.283,s=rnd(20,sp2);parts.push({x:px,y:py,vx:Math.cos(a)*s,vy:Math.sin(a)*s,l:rnd(.4,1),m:1,col})}}
 function mult(){return 1+Math.floor(combo/6)}
 function pulse(){if(mode!=='play'||cd>0||R<70)return;R-=22;cd=pcd();rings.push({x:m.x,y:m.y,r:10});beep(180,.35,.08,'triangle');shake=6}
@@ -76,80 +80,65 @@ else if(e.code==='KeyP'){if(mode==='pause')resume();else pause()}});
 document.addEventListener('pointerlockchange',()=>{if(!lockOn()&&(mode==='play'||mode==='count'))pause()});
 addEventListener('blur',()=>{if(mode==='play'||mode==='count')pause()});
 $('rs').onclick=resume;$('rt').onclick=start;$('qt').onclick=quit;
-let fleet=[],darts=[],bolts=[],up={},wave=1,nd=24,fireT=0,fx=0,fy=0,fd=1,fw=0,ft=0,fbT=1,banner={t:0,s:''},oa=0,windUsed=0,cards=[];
+let up={},wave=1,prog=0,need=35,banner={t:0,s:''},oa=0,windUsed=0,cards=[];
 const U=k=>up[k]||0,pcd=()=>2.2*Math.pow(.75,U('pulse'));
-const SP=['00111100','01111110','11011011','11111111','00100100','01011010'];
-const POOL=[['glow','Wide wick','Max glow +40 and a quick refill.',3],['burn','Slow burn','Your glow fades 20% slower.',4],['mag','Pollen magnet','Pollen drifts toward you.',3],['pulse','Quick burst','Burst recharges 25% faster.',3],['sun','Searing light','Light burns shadows 50% faster.',3],['twin','Twin darts','One more dart in every volley.',3],['rapid','Rapid fire','Darts fire 35% faster.',4],['home','Seeker darts','Darts curve toward targets.',1],['orb','Firefly guard','A firefly orbits you and zaps what it touches.',4],['greed','Honeyed pollen','Pollen scores double.',2],['wind','Second wind','Survive one lights-out at half glow.',1]];
+const POOL=[['glow','Wide wick','Max glow +40 and a quick refill.',3],['burn','Slow burn','Your glow fades 20% slower.',4],['mag','Pollen magnet','Pollen drifts toward you.',3],['bloom','Pollen bloom','Pollen appears 25% more often.',3],['pulse','Quick burst','Burst recharges 25% faster.',3],['sun','Searing light','Your light burns shadows 50% faster.',3],['chill','Frost light','Shadows crawl inside your light.',3],['orb','Firefly guard','A firefly orbits you and zaps shadows it touches.',4],['greed','Honeyed pollen','Pollen scores double.',2],['wind','Second wind','Survive one lights-out at half glow.',1]];
 function ulist(){return 'Wave '+wave+Object.entries(up).map(e=>', '+POOL.find(p=>p[0]===e[0])[1]+' x'+e[1]).join('')}
-function draft(){const av=POOL.filter(p=>U(p[0])<p[3]).sort(()=>Math.random()-.5).slice(0,3);if(!av.length){R=MAXR;nd=24;return}
+function barUp(){$('gt').textContent='Next gift: '+prog+' of '+need;$('gb').querySelector('i').style.width=Math.min(100,prog/need*100)+'%'}
+function gain(n){if(mode!=='play')return;prog+=n;if(prog>=need){wave++;prog=0;need=Math.round(35+(wave-1)*10);barUp();draft()}else barUp()}
+function draft(){const av=POOL.filter(p=>U(p[0])<p[3]).sort(()=>Math.random()-.5).slice(0,3);if(!av.length){R=MAXR;return}
 mode='pick';unlock();cards=av;
 $('dr').innerHTML='<h1>Wave '+wave+'</h1><p>Choose a gift from the dark. Press 1, 2 or 3.</p><div class="cards">'+av.map((p,i)=>'<button class="card" data-i="'+i+'"><b>'+p[1]+'</b><span>'+p[2]+'</span><em>'+(U(p[0])?'Level '+(U(p[0])+1):'New')+'</em></button>').join('')+'</div>';
 $('dr').classList.add('show');$('dr').querySelector('.card').focus()}
 function pick(i){const p=cards[i];if(!p||mode!=='pick')return;up[p[0]]=U(p[0])+1;if(p[0]==='glow'){MAXR+=40;R=Math.min(MAXR,R+70)}
-$('dr').classList.remove('show');$('ul').textContent=ulist();lock();mode='count';cnt=1.5;nd=24;
-if(wave%3===0)spawnFleet();banner={t:2.5,s:wave%3===0?'Invader fleet':'Wave '+wave};beep(880,.25,.06)}
+$('dr').classList.remove('show');$('ul').textContent=ulist();lock();mode='count';cnt=1.5;banner={t:3,s:({2:'Wave 2: streakers',3:'Wave 3: pollen thieves',4:'Wave 4: brood mothers',5:'Wave 5: siphon wraiths'})[wave]||'Wave '+wave};beep(880,.25,.06)}
 $('dr').onclick=e=>{const b=e.target.closest('.card');if(b)pick(+b.dataset.i)};
 addEventListener('keydown',e=>{if(mode==='pick'&&'123'.includes(e.key)&&e.key)pick(+e.key-1)});
-function spawnFleet(){fleet=[];const cols=Math.max(4,Math.min(8,Math.floor((W-80)/52))),rows=3+(wave>9?1:0);
-for(let r=0;r<rows;r++)for(let q=0;q<cols;q++)fleet.push({ox:q*52,oy:r*44,hp:1+(wave>6&&r===0?1:0)});
-fw=(cols-1)*52;fx=(W-fw)/2;fy=-rows*44-20;fd=1;ft=fleet.length;fbT=2}
-function extra(dt){
-banner.t-=dt;if(!fleet.length)nd-=dt;if(nd<=0){wave++;nd=24;draft();return}
-fireT-=dt;if(fireT<=0){fireT=.5/(1+.35*U('rapid'));const n=1+U('twin');for(let i=0;i<n;i++){const o=(i-(n-1)/2)*16;darts.push({x:m.x+o,y:m.y-10,vx:o*2.5,vy:-560})}}
-oa+=dt*3;const on=U('orb');
+const KC={dash:'#4fc3ff',thief:'#9bff8a',split:'#c06bff',leech:'#ff7a3d'};
+function kind(){const r=Math.random(),w=wave;
+if(w>=2&&r<.16)return 'dash';if(w>=3&&r<.28)return 'thief';if(w>=4&&r<.38)return 'split';if(w>=5&&r<.46)return 'leech';
+return Math.random()<Math.min(.3,t/200+wave*.02)?'big':'n'}
+function mk(x0,y0,k){const o={x:x0,y:y0,w:rnd(0,6),vx:0,vy:0,k,big:false,s:rnd(14,20),hp:1};
+if(k==='big'){o.k='n';o.big=true;o.s=30;o.hp=2.4}else if(k==='dash'){o.s=13;o.hp=1.2}else if(k==='thief'){o.s=11}else if(k==='split'){o.s=28;o.hp=2.2}else if(k==='leech'){o.s=22;o.hp=3}
+o.hp*=1+(wave-1)*.12;return o}
+function extra(dt){banner.t-=dt;oa+=dt*3;
+for(const s of shades){
+if(s.k==='dash'){s.c=(s.c===undefined?rnd(0,2.8):s.c)+dt;s.dt=(s.c%2.8)<.9}
+else if(s.k==='leech'){const dd=Math.hypot(m.x-s.x,m.y-s.y);s.dr=dd<R*1.25+40;if(s.dr)R-=dt*(9+wave*.8)}
+else if(s.k==='thief'){for(const p of pollen)if(Math.hypot(p.x-s.x,p.y-s.y)<s.s+8){p.got=1;burst(p.x,p.y,8,'#9bff8a',80)}}}
+pollen=pollen.filter(p=>!p.got);
+const on=U('orb');
 for(let i=0;i<on;i++){const a=oa+i*6.283/on,ox=m.x+Math.cos(a)*50,oy=m.y+Math.sin(a)*50;
-for(const s of shades)if(Math.hypot(s.x-ox,s.y-oy)<s.s+8)s.hp-=dt*5;
-for(const b of bolts)if(Math.hypot(b.x-ox,b.y-oy)<14){b.dead=1;burst(b.x,b.y,8,'#ffd98a',90)}
-for(const v of fleet)if(Math.hypot(fx+v.ox-ox,fy+v.oy-oy)<22)v.hp-=dt*3}
-for(const d of darts){
-if(U('home')){let b=null,bd=1e9;for(const s of shades){const q=Math.hypot(s.x-d.x,s.y-d.y);if(q<bd){bd=q;b=s}}
-for(const v of fleet){const vx=fx+v.ox,vy=fy+v.oy,q=Math.hypot(vx-d.x,vy-d.y);if(q<bd){bd=q;b={x:vx,y:vy}}}
-if(b&&bd<420){const a=Math.atan2(b.y-d.y,b.x-d.x);d.vx+=(Math.cos(a)*560-d.vx)*dt*4;d.vy+=(Math.sin(a)*560-d.vy)*dt*4}}
-d.x+=d.vx*dt;d.y+=d.vy*dt;
-for(const s of shades)if(!d.dead&&Math.hypot(s.x-d.x,s.y-d.y)<s.s+4){s.hp-=1;d.dead=1;burst(d.x,d.y,5,'#ffd98a',70)}
-for(const v of fleet)if(!d.dead&&Math.abs(fx+v.ox-d.x)<20&&Math.abs(fy+v.oy-d.y)<14){v.hp--;d.dead=1;burst(d.x,d.y,5,'#ff4f8b',70)}
-if(d.y<-20||d.x<-20||d.x>W+20||d.y>H+20)d.dead=1}
-darts=darts.filter(d=>!d.dead);
-for(const v of fleet)if(v.hp<=0){v.dead=1;score+=15*mult();burst(fx+v.ox,fy+v.oy,18,'#ff4f8b',160);if(Math.random()<.3)pollen.push({x:fx+v.ox,y:fy+v.oy,p:0});beep(300+Math.random()*200,.08,.05,'square')}
-fleet=fleet.filter(v=>!v.dead);
-if(fleet.length){
-if(fy<50)fy+=dt*110;else{fx+=fd*(45+wave*3+(ft-fleet.length)*5)*dt;if(fx<30||fx+fw>W-30){fd=-fd;fx=Math.max(30,Math.min(W-30-fw,fx));fy+=24}}
-fbT-=dt;if(fbT<=0){fbT=Math.max(.35,1.1-wave*.03);const v=fleet[Math.floor(Math.random()*fleet.length)];bolts.push({x:fx+v.ox,y:fy+v.oy+12,vy:170+wave*6})}
-if(fy+Math.max(...fleet.map(v=>v.oy))>H-70){R-=90;shake=20;fleet=[];ft=0;burst(W/2,H-60,60,'#ff4f8b',260);beep(70,.6,.12,'sawtooth')}
-}else if(ft){ft=0;score+=100*mult();for(let i=0;i<5;i++)pollen.push({x:rnd(60,W-60),y:rnd(100,H-100),p:0});banner={t:2.5,s:'Fleet shattered'};beep(990,.4,.08)}
-for(const b of bolts){if(b.dead)continue;b.y+=b.vy*dt;if(Math.hypot(b.x-m.x,b.y-m.y)<14){R-=45;combo=0;shake=12;b.dead=1;burst(b.x,b.y,14,'#ff4f8b',140);beep(120,.2,.08,'square')}else if(b.y>H+20)b.dead=1}
-bolts=bolts.filter(b=>!b.dead)}
+for(const s of shades)if(Math.hypot(s.x-ox,s.y-oy)<s.s+8)s.hp-=dt*5}}
 function drawX(){
-x.lineCap='round';x.strokeStyle='#fff1c8';x.lineWidth=3;
-for(const d of darts){x.beginPath();x.moveTo(d.x-d.vx*.02,d.y-d.vy*.02);x.lineTo(d.x,d.y);x.stroke()}
-for(const b of bolts){x.fillStyle='#1c0f33';x.strokeStyle='#ff4f8b';x.lineWidth=2;x.beginPath();x.arc(b.x,b.y,7,0,6.283);x.fill();x.stroke()}
-const on=U('orb');for(let i=0;i<on;i++){const a=oa+i*6.283/on;x.fillStyle='#fff6d8';x.shadowColor='#ffd98a';x.shadowBlur=14;x.beginPath();x.arc(m.x+Math.cos(a)*50,m.y+Math.sin(a)*50,4,0,6.283);x.fill();x.shadowBlur=0}
-for(const v of fleet){x.fillStyle=v.hp>1?'#ffd98a':'#ff4f8b';const px=fx+v.ox-16,py=fy+v.oy-12;for(let r=0;r<6;r++)for(let q=0;q<8;q++)if(SP[r][q]==='1')x.fillRect(px+q*4,py+r*4,4,4)}
+for(const s of shades){if(s.k==='dash'&&s.dt){x.strokeStyle='#4fc3ff66';x.lineWidth=2;x.setLineDash([6,8]);x.beginPath();x.moveTo(s.x,s.y);x.lineTo(m.x,m.y);x.stroke();x.setLineDash([])}
+if(s.k==='leech'&&s.dr){x.strokeStyle='#ff7a3daa';x.lineWidth=3;x.beginPath();x.moveTo(s.x,s.y);x.lineTo(m.x,m.y);x.stroke()}}
+const on=U('orb');
+for(let i=0;i<on;i++){const a=oa+i*6.283/on;x.fillStyle='#fff6d8';x.shadowColor='#ffd98a';x.shadowBlur=14;x.beginPath();x.arc(m.x+Math.cos(a)*50,m.y+Math.sin(a)*50,4,0,6.283);x.fill();x.shadowBlur=0}
 if(banner.t>0){x.save();x.globalAlpha=Math.min(1,banner.t);x.textAlign='center';x.fillStyle='#ffd98a';x.font='italic 600 44px Fraunces,Georgia,serif';x.fillText(banner.s,W/2,110);x.restore()}}
 function spawnShade(){const side=Math.floor(Math.random()*4),p=40;let sx,sy;
 if(side===0){sx=-p;sy=rnd(0,H)}else if(side===1){sx=W+p;sy=rnd(0,H)}else if(side===2){sx=rnd(0,W);sy=-p}else{sx=rnd(0,W);sy=H+p}
-const big=Math.random()<Math.min(.3,t/200);
-shades.push({x:sx,y:sy,s:big?30:rnd(14,20),hp:big?2.4:1,w:rnd(0,6),big,vx:0,vy:0})}
+shades.push(mk(sx,sy,kind()))}
 function update(dt){
-t+=dt;const d=1+t/22;
+t+=dt;const d=1+t/50+(wave-1)*.5+Object.values(up).reduce((a,b)=>a+b,0)*.1;
 m.x+=(tg.x-m.x)*Math.min(1,dt*7);m.y+=(tg.y-m.y)*Math.min(1,dt*7);m.a+=dt;
 R-=dt*(5+d*2.6)*Math.pow(.8,U('burn'));cd=Math.max(0,cd-dt);shake=Math.max(0,shake-dt*30);
-spP-=dt;if(spP<=0&&pollen.length<6){spP=1.1;pollen.push({x:rnd(50,W-50),y:rnd(90,H-50),p:rnd(0,6)})}
-sp-=dt;if(sp<=0){sp=Math.max(.4,2.1/Math.pow(d,.9));spawnShade()}
+spP-=dt;if(spP<=0&&pollen.length<6){spP=1.1*Math.pow(.75,U('bloom'));pollen.push({x:rnd(50,W-50),y:rnd(90,H-50),p:rnd(0,6)})}
+sp-=dt;if(sp<=0){sp=Math.max(.28,2.1/Math.pow(d,.9));for(let i=0;i<1+Math.floor((wave-1)/3);i++)spawnShade()}
 for(const s of shades){
-const dx=m.x-s.x,dy=m.y-s.y,dist=Math.hypot(dx,dy)||1,lit=dist<R;
-const spd=(55+d*13)*(lit?.4:1)*(s.big?.7:1);
+const dx0=m.x-s.x,dy0=m.y-s.y,dist=Math.hypot(dx0,dy0)||1,lit=dist<R;const tp=s.k==='thief'?pollen.reduce((b,p)=>(!b||Math.hypot(p.x-s.x,p.y-s.y)<Math.hypot(b.x-s.x,b.y-s.y))?p:b,null):null;const tx=(tp||m).x-s.x,ty=(tp||m).y-s.y,td=Math.hypot(tx,ty)||1;const dx=tx/td*dist,dy=ty/td*dist;
+const spd=(55+d*13)*(lit?Math.max(.1,.4-.1*U('chill')):1)*(s.big?.7:1)*(s.k==='dash'?(s.dt?0:3.2):s.k==='leech'?.45:s.k==='thief'?1.4:s.k==='split'?.6:1);
 s.vx+=((dx/dist)*spd-s.vx)*Math.min(1,dt*3);s.vy+=((dy/dist)*spd-s.vy)*Math.min(1,dt*3);
 s.x+=s.vx*dt;s.y+=s.vy*dt;s.w+=dt*5;
 if(lit){s.hp-=dt*(1.3+(1-dist/R))*(1+.5*U('sun'));if(Math.random()<.3)parts.push({x:s.x,y:s.y,vx:rnd(-20,20),vy:rnd(-20,20),l:.5,m:.5,col:'#b58bff'})}
-if(dist<s.s+7){R-=s.big?95:60;combo=0;shake=14;burst(s.x,s.y,22,'#ff4f8b',160);s.dead=1;beep(110,.25,.09,'square')}
-else if(s.hp<=0){s.dead=1;score+=(s.big?30:10)*mult();burst(s.x,s.y,26,'#ffd98a',150);
+if(dist<s.s+7){R-=s.k==='thief'?15:s.big?95:s.k==='dash'?75:60;combo=0;shake=14;burst(s.x,s.y,22,'#ff4f8b',160);s.dead=1;beep(110,.25,.09,'square')}
+else if(s.hp<=0){s.dead=1;gain(s.big?2:1);score+=(s.big?30:10)*mult();burst(s.x,s.y,26,'#ffd98a',150);if(s.k==='split'){for(let i=0;i<3;i++)shades.push(mk(s.x+rnd(-12,12),s.y+rnd(-12,12),'n'))}
 for(let i=0;i<(s.big?3:1);i++)pollen.push({x:s.x+rnd(-20,20),y:s.y+rnd(-20,20),p:0});beep(660,.12,.05)}}
 for(const r of rings){r.r+=dt*520;for(const s of shades){if(!s.dead&&Math.hypot(s.x-r.x,s.y-r.y)<r.r&&!s.hit&&r.r<340){s.hp-=s.big?1.5:3;s.hit=1;s.vx*=-2;s.vy*=-2}}}
 rings=rings.filter(r=>r.r<340);
 if(rings.length===0)shades.forEach(s=>s.hit=0);
 shades=shades.filter(s=>!s.dead);
-for(const p of pollen){p.p+=dt*3;const pd=Math.hypot(p.x-m.x,p.y-m.y);if(U('mag')&&pd<90+U('mag')*70){p.x+=(m.x-p.x)*dt*4;p.y+=(m.y-p.y)*dt*4}if(pd<24){p.got=1;R=Math.min(MAXR,R+42);combo++;score+=5*mult()*(1+U('greed'));burst(p.x,p.y,10,'#ffd98a',90);beep(780+Math.min(combo,20)*30,.1,.05)}}
+for(const p of pollen){p.p+=dt*3;const pd=Math.hypot(p.x-m.x,p.y-m.y);if(U('mag')&&pd<70+U('mag')*40){p.x+=(m.x-p.x)*dt*4;p.y+=(m.y-p.y)*dt*4}if(pd<24){p.got=1;R=Math.min(MAXR,R+42);combo++;score+=5*mult()*(1+U('greed'));gain(1);burst(p.x,p.y,10,'#ffd98a',90);beep(780+Math.min(combo,20)*30,.1,.05)}}
 pollen=pollen.filter(p=>!p.got);
 for(const p of parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=.96;p.vy*=.96;p.l-=dt}
 parts=parts.filter(p=>p.l>0);
@@ -164,7 +153,7 @@ x.fillStyle='#10132b';x.fillRect(-20,-20,W+40,H+40);
 for(const s of specks){x.globalAlpha=s.a;x.fillStyle='#8f95c9';x.beginPath();x.arc(s.x*W,s.y*H,s.r,0,6.283);x.fill()}
 x.globalAlpha=1;
 for(const s of shades){const wob=Math.sin(s.w)*3;x.fillStyle='#1c0f33';x.beginPath();x.ellipse(s.x,s.y,s.s+wob,s.s-wob*.6,0,0,6.283);x.fill();
-x.strokeStyle='#5a3a9a';x.lineWidth=2;x.stroke()}
+x.strokeStyle=KC[s.k]||'#5a3a9a';x.lineWidth=2;x.stroke()}
 const mx=m?m.x:W/2,my=m?m.y:H/2,r=Math.max(R||MAXR,1);
 let g=x.createRadialGradient(mx,my,r*.12,mx,my,r);
 g.addColorStop(0,'rgba(5,6,15,0)');g.addColorStop(.55,'rgba(5,6,15,.35)');g.addColorStop(1,'rgba(5,6,15,.975)');
@@ -177,7 +166,7 @@ if(m){
 for(const p of pollen){const pr=5+Math.sin(p.p)*1.5;
 const q=x.createRadialGradient(p.x,p.y,0,p.x,p.y,pr*4);q.addColorStop(0,'rgba(255,217,138,.9)');q.addColorStop(1,'rgba(255,120,150,0)');
 x.fillStyle=q;x.beginPath();x.arc(p.x,p.y,pr*4,0,6.283);x.fill();x.fillStyle='#fff6d8';x.beginPath();x.arc(p.x,p.y,pr*.6,0,6.283);x.fill()}
-for(const s of shades){const e=s.s*.35;x.fillStyle='#ff4f8b';
+for(const s of shades){const e=s.s*.35;x.fillStyle=KC[s.k]||'#ff4f8b';
 x.beginPath();x.arc(s.x-e,s.y-e*.3,e*.45,0,6.283);x.arc(s.x+e,s.y-e*.3,e*.45,0,6.283);x.fill()}
 for(const p of parts){x.globalAlpha=Math.max(0,p.l/p.m);x.fillStyle=p.col;x.fillRect(p.x-1.5,p.y-1.5,3,3)}
 x.globalAlpha=1;
